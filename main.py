@@ -1,32 +1,38 @@
 import requests
+import json
 
 def guncelle():
-    url = "https://m3uliste.gt.tc/?i=3"
+    # Hedef m3u linkin
+    hedef_url = "https://m3uliste.gt.tc/?i=3"
     
-    # Siteye gerçek bir tarayıcı gibi görünüyoruz
+    # AllOrigins servisi aracılığıyla sitenin bot korumasını atlıyoruz
+    proxy_servis_url = f"https://api.allorigins.win/get?url={requests.utils.quote(hedef_url)}"
+    
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Referer': 'https://google.com'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     }
     
     try:
-        print("Bağlantı kuruluyor...")
-        # Session kullanarak çerez desteği ekliyoruz
-        session = requests.Session()
-        response = session.get(url, headers=headers, timeout=30)
+        print("Güvenlik duvarı aşılıyor (Proxy kullanılıyor)...")
+        response = requests.get(proxy_servis_url, headers=headers, timeout=30)
         
-        # Eğer gelen veri m3u formatında değilse hata bas
-        if "#EXTM3U" not in response.text:
-            print("Uyarı: M3U formatı alınamadı, koruma hala aktif olabilir.")
+        # Gelen veriyi JSON olarak çözümle
+        data = response.json()
+        raw_content = data['contents']
         
-        with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
-            f.write(response.text)
-        print("Dosya başarıyla tazelendi.")
-        
+        # Eğer içerik m3u formatındaysa kaydet
+        if "#EXTM3U" in raw_content:
+            with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
+                f.write(raw_content)
+            print("BAŞARILI: Gerçek m3u linkleri yakalandı ve kaydedildi!")
+        else:
+            print("HATA: Liste içeriği hala beklenen formatta değil.")
+            # İncelemek için gelen veriyi yine de yazalım
+            with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
+                f.write(raw_content)
+                
     except Exception as e:
-        print(f"Hata: {e}")
+        print(f"Bağlantı sırasında bir sorun oluştu: {e}")
 
 if __name__ == "__main__":
     guncelle()
