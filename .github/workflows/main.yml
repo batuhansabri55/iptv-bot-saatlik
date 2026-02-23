@@ -1,0 +1,29 @@
+name: Saatlik IPTV Guncelleme
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Her saat başı çalışır
+  workflow_dispatch: # El ile başlatma butonu ekler
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python Kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Kutuphaneleri Yukle
+        run: pip install requests
+      - name: Botu Calistir
+        run: python main.py
+      - name: Degisiklikleri Kaydet
+        run: |
+          git config --global user.name 'GitHub Bot'
+          git config --global user.email 'bot@github.com'
+          git add otomatik_liste.m3u
+          git commit -m "Liste Guncellendi" || exit 0
+          git push
