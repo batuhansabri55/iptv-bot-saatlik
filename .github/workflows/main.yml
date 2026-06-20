@@ -1,36 +1,16 @@
-name: Otomatik IPTV Link Kontrolu
-
-on:
-  schedule:
-    # Her 6 saatte bir otomatik çalışır (Günde 4 kez listeyi tazeler)
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # İstediğin zaman "Run" butonuna basıp elle çalıştırmak için
-
-jobs:
-  check-iptv:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Depoyu Bilgisayara Çek
-      uses: actions/checkout@v4
-
-    - name: Python Kurulumu yap
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
-
-    - name: Gerekli Kütüphaneleri Yükle
+- name: Listeyi Diger Depoya Gonder (Push)
       run: |
-        python -m pip install --upgrade pip
-        pip install requests
-
-    - name: IPTV Bulucu Kodunu Çalıştır
-      run: python main.py
-
-    - name: Değişiklikleri Depoya Geri Yükle (Push)
-      run: |
-        git config --local user.email "actions@github.com"
-        git config --local user.name "GitHub Actions"
-        git add otomatik_liste.m3u
-        git commit -m "Liste Guncellendi" || echo "Değişiklik yok"
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # 1. Adım: İkinci deponu (AkcagozTV_Canli) bilgisayara gizlice indiriyoruz
+        git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/batuhansabri55/AkcagozTV_Canli.git dondurulen_depo
+        
+        # 2. Adım: Az önce kodun ürettiği taze 'tr.m3u' dosyasını bu deponun içine kopyalıyoruz
+        cp tr.m3u dondurulen_depo/tr.m3u
+        
+        # 3. Adım: İkinci depoya girip yeni listeyi yüklüyoruz
+        cd dondurulen_depo
+        git add tr.m3u
+        git commit -m "Canlı Türkçe Listesi Güncellendi" || exit 0
         git push
