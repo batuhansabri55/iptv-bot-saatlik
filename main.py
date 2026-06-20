@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Büyük havuz listesi (1.txt)
 RAW_GITHUB_URL = "https://raw.githubusercontent.com/Sword-Saint69/fifa/989a0fdbfce75e017a04a804df5ab2e62ca071cf/1.txt"
 
-# Güvenlik duvarlarını aşmak için oynatıcı kimliği
 HEADERS = {
     "User-Agent": "IPTVIngest/1.0.0"
 }
@@ -44,7 +43,6 @@ def paneli_ve_turkce_kanallari_test_et(url):
         response = requests.get(test_url, headers=HEADERS, timeout=7)
         if response.status_code == 200 and "#EXTM3U" in response.text:
             satirlar = response.text.splitlines()
-            bulunan_tr_kanallari = []
             sadece_tr_linkleri = []
             
             for i in range(len(satirlar)):
@@ -53,30 +51,22 @@ def paneli_ve_turkce_kanallari_test_et(url):
                     satir_ust = satir.upper()
                     if any(isaret in satir_ust for isaret in tr_isaretleri):
                         if i + 1 < len(satirlar) and satirlar[i+1].startswith("http"):
-                            kanal_linki = satirlar[i+1]
-                            
-                            # TiviMate'te donmasın diye .ts formatına zorluyoruz
-                            temiz_link = kanal_linki.replace("type=m3u_plus", "output=ts").replace("type=m3u", "output=ts")
-                            if "output=ts" not in temiz_link:
-                                temiz_link += "&output=ts"
-                                
-                            bulunan_tr_kanallari.append((satir, temiz_link))
-                            sadece_tr_linkleri.append(temiz_link)
+                            sadece_tr_linkleri.append(satirlar[i+1])
             
-            # İçinde en az 50 Türkçe kanal barındıran panelleri kontrol et
+            # En az 50 Türkçe kanal barındıran aktif paneli bul
             if len(sadece_tr_linkleri) >= 50:
                 test_edilecekler = random.sample(sadece_tr_linkleri, min(3, len(sadece_tr_linkleri)))
                 calisan_yayin_sayisi = sum(1 for link in test_edilecekler if yayin_canli_mi(link))
                 
                 if calisan_yayin_sayisi >= 2:
-                    print(f"🟢 ÇALIŞIYOR: {url} ({len(sadece_tr_linkleri)} Türkçe kanal aktif!)")
-                    return bulunan_tr_kanallari
+                    print(f"🟢 CANLI PANEL BULUNDU: {test_url}")
+                    return test_url
     except Exception:
         pass
     return None
 
 def en_iyi_paneli_tara_ve_sec(link_listesi):
-    print("⚡ Çalışan ve canlı akışı olan Türkçe panel aranıyor, lütfen bekleyin...")
+    print("⚡ Çalışan ve canlı akışı olan Türkçe panel aranıyor...")
     with ThreadPoolExecutor(max_workers=40) as executor:
         gorevler = {executor.submit(paneli_ve_turkce_kanallari_test_et, url): url for url in link_listesi}
         for gosterge in as_completed(gorevler):
@@ -91,21 +81,18 @@ def ana_calistirici():
         print("❌ Havuz boş olduğu için işlem iptal edildi.")
         return
 
-    ayiklanmis_tr_listesi = en_iyi_paneli_tara_ve_sec(link_listesi)
+    canli_panel_url = en_iyi_paneli_tara_ve_sec(link_listesi)
     
-    if ayiklanmis_tr_listesi:
+    if canli_panel_url:
         try:
-            # Geçici olarak tr.m3u oluşturuluyor, workflow bunu diğer depoya taşıyacak
-            with open("tr.m3u", "w", encoding="utf-8") as f:
-                f.write("#EXTM3U\n")
-                for inf_satiri, link_satiri in ayiklanmis_tr_listesi:
-                    f.write(f"{inf_satiri}\n")
-                    f.write(f"{link_satiri}\n")
-            print(f"🎉 İşlem Başarılı! Toplam {len(ayiklanmis_tr_listesi)} adet CANLI Türkçe kanal hazırlandı.")
+            # Bulunan canlı paneli geçici bir metin dosyasına yazıyoruz
+            with open("canli_panel.txt", "w", encoding="utf-8") as f:
+                f.write(canli_panel_url)
+            print(f"🎉 Başarılı! Canlı URL geçici hafızaya alındı: {canli_panel_url}")
         except Exception as e:
             print(f"❌ Dosya yazılırken hata oldu: {e}")
     else:
-        print("❌ Havuzda aktif ve yeterli Türkçe kanal barındıran bir panel bulunamadı.")
+        print("❌ Havuzda aktif ve canlı Türkçe kanal barındıran bir panel bulunamadı.")
 
 if __name__ == "__main__":
     ana_calistirici()
