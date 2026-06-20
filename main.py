@@ -1,86 +1,70 @@
 import requests
 import re
-from concurrent.futures import ThreadPoolExecutor
 
-# Taranacak olan büyük listenin raw adresi
+# Taranacak olan büyük havuzun raw adresi
 RAW_GITHUB_URL = "https://raw.githubusercontent.com/Sword-Saint69/fifa/989a0fdbfce75e017a04a804df5ab2e62ca071cf/1.txt"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-def linkleri_topla():
-    print("🔄 Kaynak GitHub listesi indiriliyor...")
+def havuzu_indir():
+    print("🔄 Kaynak havuz listesi indiriliyor...")
     try:
         response = requests.get(RAW_GITHUB_URL, headers=HEADERS, timeout=15)
         if response.status_code == 200:
             linkler = re.findall(r'(http://[^\s"\']+get\.php\?[^\s"\']+)', response.text)
-            linkler = list(set(linkler))
-            print(f"✅ Toplam {len(linkler)} benzersiz ana URL toplandı. Kanal ayıklama başlıyor...\n")
+            # Benzersiz linkleri sıralı koruyarak ayıkla
+            linkler = list(dict.fromkeys(linkler))
+            print(f"✅ Havuzdan {len(linkler)} adet panel adresi toplandı. Test başlıyor...")
             return linkler
         return []
     except Exception as e:
-        print(f"❌ Liste çekilemedi: {e}")
+        print(f"❌ Havuz indirilemedi: {e}")
         return []
 
-def kanallari_ayıkla(url):
+def en_iyi_paneli_bul_ve_cek(link_listesi):
     """
-    Çalışan playlist linkinin içine girer ve sadece Türkçe olan kanalları satır satır söker.
+    Listeyi sırayla tarar, İÇİNDE TÜRKÇE KANAL OLAN VE ÇALIŞAN İLK SAĞLAM PANELİ bulduğu an
+    tüm içeriğini indirir ve aramayı durdurur. Havuzun şişmesini engeller.
     """
-    # İçeriği tam okumak için formatı m3u_plus olarak bırakıyoruz veya m3u yapıyoruz
-    test_url = url.replace("type=m3u", "type=m3u_plus")
-    bulunan_kanallar = []
+    tr_kelimeler = ["TR:", "TURK", "TÜRK", "TR -", "TR|", "TURKISH"]
     
-    try:
-        # Sunuculardan veriyi çekiyoruz (Tam listeyi okumak için stream=False yapıyoruz)
-        response = requests.get(test_url, headers=HEADERS, timeout=8)
-        if response.status_code == 200 and "#EXTM3U" in response.text:
-            satirlar = response.text.splitlines()
+    for sira, url in enumerate(link_listesi, 1):
+        # İstek hızını artırmak ve temiz veri almak için m3u_plus formatına zorluyoruz
+        test_url = url.replace("type=m3u", "type=m3u_plus")
+        print(f"[{sira}/{len(link_listesi)}] Deneniyor: {test_url}")
+        
+        try:
+            # Panelin aktif olup olmadığını ve içeriğini kontrol etmek için bağlanıyoruz
+            response = requests.get(test_url, headers=HEADERS, timeout=7)
+            if response.status_code == 200 and "#EXTM3U" in response.text:
+                # Panel çalışıyor, şimdi içinde gerçekten Türkçe kanal var mı kontrol edelim
+                icerik_buyuk = response.text.upper()
+                if any(kelime in icerik_buyuk for kelime in tr_kelimeler):
+                    print(f"\n💚 HARİKA PANEL BULUNDU! Türkçe kanallar içeriyor: {url}")
+                    return response.text  # Panel içeriğini olduğu gibi döndür
+        except Exception:
+            continue
             
-            # Satırları dönerek Türkçe olanları tespit ediyoruz
-            for i in range(len(satirlar)):
-                satir = satirlar[i]
-                # Eğer satır bir kanal bilgisi (#EXTINF) ise ve Türkçe etiketleri içeriyorsa
-                if satir.startswith("#EXTINF"):
-                    # Türkçe kanalları yakalayacak filtreler
-                    tr_kelimeler = ["TR:", "TURK", "TÜRK", "TR -", "TR|", "TURKISH"]
-                    if any(kelime in satir.upper() for kelime in tr_kelimeler):
-                        # Bir sonraki satır o kanalın gerçek yayın linkidir (.ts veya .m3u8)
-                        if i + 1 < len(satirlar) and satirlar[i+1].startswith("http"):
-                            bulunan_kanallar.append(satir)         # #EXTINF satırını ekle
-                            bulunan_kanallar.append(satirlar[i+1])  # Hemen altındaki yayın linkini ekle
-            
-            if bulunan_kanallar:
-                print(f"💚 BAŞARILI: {url} içerisinden {len(bulunan_kanallar) // 2} adet Türkçe kanal çekildi.")
-                return bulunan_kanallar
-    except Exception:
-        pass
     return None
 
 def ana_calistirici():
-    link_listesi = linkleri_topla()
+    link_listesi = havuzu_indir()
     if not link_listesi:
-        print("❌ Taranacak link bulunamadı.")
+        print("❌ Taranacak panel adresi bulunamadı.")
         return
 
-    tum_havuz_kanallari = []
+    # Sadece çalışan ve Türkçe olan TEK bir panelin tam listesini söküyoruz
+    m3u_icerigi = en_iyi_paneli_bul_ve_cek(link_listesi)
     
-    # 20 koldan hızlıca havuzdaki tüm m3u'ların içine dalıyoruz
-    with ThreadPoolExecutor(max_workers=20) as executor:
-        sonuclar = executor.map(kanallari_ayıkla, link_listesi)
-        for sonuc in sonuclar:
-            if sonuc:
-                tum_havuz_kanallari.extend(sonuc)
-
-    print(f"\n✍️ Toplam {len(tum_havuz_kanallari) // 2} adet benzersiz canlı TR kanal dosyaya yazılıyor...")
-    
-    # Kanalları birleştirip Notepad++ ekranındaki gibi gerçek bir M3U dosyası üretiyoruz
-    with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
-        f.write("#EXTM3U\n")
-        for satir in tum_havuz_kanallari:
-            f.write(f"{satir}\n")
-            
-    print("🎉 Oynatılmaya hazır gerçek otomatik_liste.m3u başarıyla güncellendi!")
+    if m3u_icerigi:
+        print("\n✍️ Seçilen panelin tüm m3u listesi depoya yazılıyor...")
+        with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
+            f.write(m3u_icerigi)
+        print("🎉 otomatik_liste.m3u tertemiz şekilde güncellendi!")
+    else:
+        print("❌ Havuzda hem aktif olan hem de içinde Türkçe kanal barındıran bir panel bulunamadı.")
 
 if __name__ == "__main__":
     ana_calistirici()
