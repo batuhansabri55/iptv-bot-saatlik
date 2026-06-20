@@ -30,11 +30,11 @@ def tek_link_test_et(url):
     """
     test_url = url.replace("type=m3u_plus", "type=m3u").replace("type=m3u", "type=m3u_plus")
     
-    # Türkçe kanalları yakalayacak geniş ve kapsayıcı filtre havuzu
+    # Türkçe kanalları ve kategorileri yakalayacak en geniş filtre havuzu
     tr_isaretleri = [
         "TR:", "TR|", "TR -", "TURKISH", "TÜRKÇE", "TURKCE", 
         'GROUP-TITLE="TR', 'GROUP-TITLE="TÜRK', 'GROUP-TITLE="TURK',
-        'GROUP-TITLE="★ TÜRKİYE', 'GROUP-TITLE="TR |'
+        'GROUP-TITLE="★ TÜRKİYE', 'GROUP-TITLE="TR |', "SINEMA", "BELGESEL"
     ]
     
     try:
@@ -48,15 +48,15 @@ def tek_link_test_et(url):
                 satir = satirlar[i]
                 if satir.startswith("#EXTINF"):
                     satir_ust = satir.upper()
-                    # Satırda veya grup adında Türkçe ibaresi var mı?
+                    # Satırda veya grup adında Türkçe/Sinema/Belgesel ibaresi var mı?
                     if any(isaret in satir_ust for isaret in tr_isaretleri):
                         if i + 1 < len(satirlar) and satirlar[i+1].startswith("http"):
                             bulunan_kanallar.append(satir)
                             bulunan_kanallar.append(satirlar[i+1])
             
-            # GÜVENLİK FİLTRESİ: Eğer panelde en az 200 tane Türkçe kanal yoksa, 
-            # o panel ya eksiktir ya patlaktır ya da sahtedir. Onu eliyoruz!
-            if len(bulunan_kanallar) >= 400: # 400 satır = 200 kanal yapar
+            # GÜVENLİK FİLTRESİ: Eğer panelde en az 150 tane Türkçe kanal yoksa, 
+            # o panel eksiktir veya patlaktır. Onu eliyoruz! (300 satır = 150 kanal)
+            if len(bulunan_kanallar) >= 300:
                 return bulunan_kanallar, url
     except Exception:
         pass
@@ -74,4 +74,29 @@ def en_zengin_turkce_paneli_sec(link_listesi):
             if sonuc:
                 kanal_listesi, panel_url = sonuc
                 print(f"\n💚 HARİKA VE DOLU PANEL BULUNDU: {panel_url}")
-                print(f"📦 Tüm kategorilerden toplam {len(kanal_listesi) // 2} adet canlı Türkçe kanal sök
+                print(f"📦 Toplam {len(kanal_listesi) // 2} adet canlı Türkçe kanal söküldü!")
+                return kanal_listesi
+                
+    return None
+
+def ana_calistirici():
+    link_listesi = havuzu_indir()
+    if not link_listesi:
+        print("❌ Taranacak panel adresi bulunamadı.")
+        return
+
+    # Sadece ve sadece tüm kategorilerin olduğu temiz Türkçe listeyi alıyoruz
+    zengin_tr_havuzu = en_zengin_turkce_paneli_sec(link_listesi)
+    
+    if zengin_tr_havuzu:
+        print("✍️ Ulusal, Sinema, Belgesel, Çocuk dahil tüm kanallar dosyaya yazılıyor...")
+        with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
+            f.write("#EXTM3U\n")
+            for satir in zengin_tr_havuzu:
+                f.write(f"{satir}\n")
+        print("🎉 İşlem başarılı! TiviMate için taptaze eksiksiz listen hazır usta.")
+    else:
+        print("❌ Havuzda kriterlere uyan sağlam bir panel bulunamadı.")
+
+if __name__ == "__main__":
+    ana_calistirici()
