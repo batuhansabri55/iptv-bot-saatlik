@@ -25,45 +25,47 @@ def havuzu_indir():
 
 def tek_link_test_et(url):
     """
-    Panel linkini test eder. İçinde gerçekten TÜRKÇE KATEGORİSİ veya 
-    net Türkçe kanal etiketi var mı diye bakar. Varsa sadece o Türkçe kanalları ayıklar.
+    Panel linkinin içine girer. Ulusal, sinema, belgesel, çocuk dahil 
+    tüm Türkçe kanalları ve kategorileri satır satır eksiksiz söker.
     """
     test_url = url.replace("type=m3u_plus", "type=m3u").replace("type=m3u", "type=m3u_plus")
     
-    # Gerçek Türkçe kanalları ayırt etmek için çok sıkı filtreler
-    tr_kategori_filtreleri = [
+    # Türkçe kanalları yakalayacak geniş ve kapsayıcı filtre havuzu
+    tr_isaretleri = [
+        "TR:", "TR|", "TR -", "TURKISH", "TÜRKÇE", "TURKCE", 
         'GROUP-TITLE="TR', 'GROUP-TITLE="TÜRK', 'GROUP-TITLE="TURK',
-        'TR:', 'TR|', 'TR -', 'TURKISH'
+        'GROUP-TITLE="★ TÜRKİYE', 'GROUP-TITLE="TR |'
     ]
     
     try:
-        response = requests.get(test_url, headers=HEADERS, timeout=6)
+        # Bağlantı kalitesini ölçmek için zaman aşımını 7 saniye yapıyoruz
+        response = requests.get(test_url, headers=HEADERS, timeout=7)
         if response.status_code == 200 and "#EXTM3U" in response.text:
             satirlar = response.text.splitlines()
-            gecerli_tr_kanallari = []
+            bulunan_kanallar = []
             
             for i in range(len(satirlar)):
                 satir = satirlar[i]
                 if satir.startswith("#EXTINF"):
                     satir_ust = satir.upper()
-                    # Satırda sıkı Türkçe filtrelerimizden biri var mı?
-                    if any(filtre in satir_ust for filtre in tr_kategori_filtreleri):
-                        # Altındaki satırın geçerli bir url olduğunu kontrol et
+                    # Satırda veya grup adında Türkçe ibaresi var mı?
+                    if any(isaret in satir_ust for isaret in tr_isaretleri):
                         if i + 1 < len(satirlar) and satirlar[i+1].startswith("http"):
-                            gecerli_tr_kanallari.append(satir)
-                            gecerli_tr_kanallari.append(satirlar[i+1])
+                            bulunan_kanallar.append(satir)
+                            bulunan_kanallar.append(satirlar[i+1])
             
-            # Eğer bu panelden gerçekten ayıklanmış en az 10 tane net Türkçe kanal bulabildiysek onay veriyoruz
-            if len(gecerli_tr_kanallari) >= 20: 
-                return gecerli_tr_kanallari, url
+            # GÜVENLİK FİLTRESİ: Eğer panelde en az 200 tane Türkçe kanal yoksa, 
+            # o panel ya eksiktir ya patlaktır ya da sahtedir. Onu eliyoruz!
+            if len(bulunan_kanallar) >= 400: # 400 satır = 200 kanal yapar
+                return bulunan_kanallar, url
     except Exception:
         pass
     return None
 
-def en_iyi_turkce_listeyi_sec(link_listesi):
-    print("⚡ Sıkı filtreli Türkçe kanal taraması başlatıldı...")
+def en_zengin_turkce_paneli_sec(link_listesi):
+    print("⚡ Tüm kategorileri içeren (Ulusal, Sinema, Belgesel...) dolgun Türkçe panel aranıyor...")
     
-    # 35 kanaldan hızlıca sunucuları tarıyoruz
+    # 35 koldan hızlıca havuzun içine dalıyoruz
     with ThreadPoolExecutor(max_workers=35) as executor:
         gorevler = {executor.submit(tek_link_test_et, url): url for url in link_listesi}
         
@@ -71,30 +73,5 @@ def en_iyi_turkce_listeyi_sec(link_listesi):
             sonuc = gosterge.result()
             if sonuc:
                 kanal_listesi, panel_url = sonuc
-                print(f"\n💚 %100 TÜRKÇE İÇERİKLİ SAĞLAM PANEL BULUNDU: {panel_url}")
-                print(f"📦 Bu panelden {len(kanal_listesi) // 2} adet saf Türkçe kanal başarıyla söküldü!")
-                return kanal_listesi
-                
-    return None
-
-def ana_calistirici():
-    link_listesi = havuzu_indir()
-    if not link_listesi:
-        print("❌ Taranacak panel adresi bulunamadı.")
-        return
-
-    # Sadece ve sadece Türkçe kanallardan oluşan temiz listeyi alıyoruz
-    temiz_tr_kanallari = en_iyi_turkce_listeyi_sec(link_listesi)
-    
-    if temiz_tr_kanallari:
-        print("✍️ Saf Türkçe kanallar otomatik_liste.m3u dosyasına yazılıyor...")
-        with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
-            f.write("#EXTM3U\n")
-            for satir in temiz_tr_kanallari:
-                f.write(f"{satir}\n")
-        print("🎉 İşlem başarılı! Yabancı kanallardan arındırılmış liste hazır usta.")
-    else:
-        print("❌ Havuzda kriterlere uyan aktif bir Türkçe playlist bulunamadı.")
-
-if __name__ == "__main__":
-    ana_calistirici()
+                print(f"\n💚 HARİKA VE DOLU PANEL BULUNDU: {panel_url}")
+                print(f"📦 Tüm kategorilerden toplam {len(kanal_listesi) // 2} adet canlı Türkçe kanal sök
