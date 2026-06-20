@@ -1,34 +1,69 @@
 import requests
-import json
+import re
+from concurrent.futures import ThreadPoolExecutor
 
-def guncelle():
-    # Hedef m3u linkin
-    hedef_url = "https://m3uliste.gt.tc/?i=3"
-    
-    # AllOrigins servisi aracılığıyla sitenin bot korumasını atlıyoruz
-    proxy_url = f"https://api.allorigins.win/get?url={requests.utils.quote(hedef_url)}"
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    }
-    
+# Taranacak olan büyük listenin raw adresi
+RAW_GITHUB_URL = "https://raw.githubusercontent.com/Sword-Saint69/fifa/989a0fdbfce75e017a04a804df5ab2e62ca071cf/1.txt"
+
+def linkleri_topla():
+    print("🔄 Kaynak GitHub listesi indiriliyor...")
     try:
-        print("Proxy üzerinden bağlantı deneniyor...")
-        response = requests.get(proxy_url, headers=headers, timeout=30)
-        data = response.json()
-        raw_content = data['contents']
-        
-        # Eğer içerik m3u formatındaysa kaydet
-        if "#EXTM3U" in raw_content:
-            with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
-                f.write(raw_content)
-            print("BAŞARILI: Liste güncellendi.")
-        else:
-            print("HATA: Liste içeriği hala beklenen formatta değil.")
-            with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
-                f.write(raw_content)
+        response = requests.get(RAW_GITHUB_URL, timeout=15)
+        if response.status_code == 200:
+            linkler = re.findall(r'(http://[^\s"\']+get\.php\?[^\s"\']+)', response.text)
+            linkler = list(set(linkler))
+            print(f"✅ Toplam {len(linkler)} benzersiz link toplandı. Kontrol başlıyor...\n")
+            return linkler
+        return []
     except Exception as e:
-        print(f"Bağlantı hatası: {e}")
+        print(f"❌ Liste çekilemedi: {e}")
+        return []
+
+def linki_kontrol_et(url):
+    # Hızlı yanıt almak için m3u formatında test ediyoruz
+    test_url = url.replace("type=m3u_plus", "type=m3u")
+    try:
+        response = requests.get(test_url, timeout=5, stream=True)
+        if response.status_code == 200:
+            # İlk 50KB veri dil kontrolü için fazlasıyla yeterli
+            icerik_parcasi = response.iter_content(chunk_size=50000)
+            ilk_blok = next(icerik_parcasi, b"").decode('utf-8', errors='ignore').upper()
+            
+            # Türkçe kanalları yakalayacak kelimeler
+            tr_kelimeler = ["TR:", "TURK", "TÜRK", "TR -", "TR|", "TURKISH"]
+            if any(kelime in ilk_blok for kelime in tr_kelimeler):
+                print(f"💚 ÇALIŞIYOR VE TÜRKÇE: {url}")
+                return url
+    except Exception:
+        pass
+    return None
+
+def ana_calistirici():
+    link_listesi = linkleri_topla()
+    if not link_listesi:
+        print("❌ Taranacak link bulunamadı.")
+        return
+
+    calisan_tr_linkler = []
+    
+    # Aynı anda 20 istek atarak hızlıca taratıyoruz
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        sonuclar = executor.map(linki_kontrol_et, link_listesi)
+        for sonuc in sonuclar:
+            if sonuc:
+                calisan_tr_linkler.append(sonuc)
+
+    # Elde edilen çalışan linkleri otomatik_liste.m3u formatına uygun yazıyoruz
+    print(f"\n✍️ {len(calisan_tr_linkler)} adet çalışan TR linki dosyaya yazılıyor...")
+    
+    with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
+        f.write("#EXTM3U\n") # M3U dosyasının standart başlığı
+        for sira, link in enumerate(calisan_tr_linkler, 1):
+            # TiviMate veya OTT Navigator'da düzgün görünmesi için isim veriyoruz
+            f.write(f'#EXTINF:-1,--- ÇALIŞAN TR LİSTE {sira} ---\n')
+            f.write(f'{link}\n')
+            
+    print("🎉 otomatik_liste.m3u başarıyla güncellendi!")
 
 if __name__ == "__main__":
-    guncelle()
+    ana_calistirici()
