@@ -37,7 +37,6 @@ def yayin_canli_mi(test_url):
     return False
 
 def paneli_ve_turkce_kanallari_test_et(url):
-    # m3u_plus formatına çekiyoruz
     test_url = url.replace("type=m3u_plus", "type=m3u").replace("type=m3u", "type=m3u_plus")
     tr_isaretleri = ["TR:", "TR|", "TR -", "TURKISH", "TÜRKÇE", "TURKCE", 'GROUP-TITLE="TR', "TÜRK"]
     
@@ -56,7 +55,7 @@ def paneli_ve_turkce_kanallari_test_et(url):
                         if i + 1 < len(satirlar) and satirlar[i+1].startswith("http"):
                             kanal_linki = satirlar[i+1]
                             
-                            # 🛑 TiviMate'te kesin açılması için .ts formatına çeviriyoruz
+                            # TiviMate'te donmasın diye .ts formatına çekiyoruz
                             temiz_link = kanal_linki.replace("type=m3u_plus", "output=ts").replace("type=m3u", "output=ts")
                             if "output=ts" not in temiz_link:
                                 temiz_link += "&output=ts"
@@ -64,12 +63,10 @@ def paneli_ve_turkce_kanallari_test_et(url):
                             bulunan_tr_kanallari.append((satir, temiz_link))
                             sadece_tr_linkleri.append(temiz_link)
             
-            # İçinde en az 50 Türkçe kanal olan panelleri seç
             if len(sadece_tr_linkleri) >= 50:
                 test_edilecekler = random.sample(sadece_tr_linkleri, min(3, len(sadece_tr_linkleri)))
                 calisan_yayin_sayisi = sum(1 for link in test_edilecekler if yayin_canli_mi(link))
                 
-                # Test edilen kanallar aktifse panel sağlamdır
                 if calisan_yayin_sayisi >= 2:
                     print(f"🟢 ÇALIŞIYOR: {url} ({len(sadece_tr_linkleri)} Türkçe kanal aktif!)")
                     return bulunan_tr_kanallari
@@ -80,7 +77,6 @@ def paneli_ve_turkce_kanallari_test_et(url):
 def en_iyi_paneli_tara_ve_sec(link_listesi):
     print("⚡ Çalışan ve canlı akışı olan Türkçe panel aranıyor, lütfen bekleyin...")
     with ThreadPoolExecutor(max_workers=40) as executor:
-        # ⚠️ Buradaki isim hatası tamamen düzeltildi usta
         gorevler = {executor.submit(paneli_ve_turkce_kanallari_test_et, url): url for url in link_listesi}
         for gosterge in as_completed(gorevler):
             sonuc = gosterge.result()
@@ -98,16 +94,17 @@ def ana_calistirici():
     
     if ayiklanmis_tr_listesi:
         try:
-            with open("otomatik_liste.m3u", "w", encoding="utf-8") as f:
+            # Burası geçici olarak 'tr.m3u' oluşturuyor, workflow bunu diğer depoya taşıyacak!
+            with open("tr.m3u", "w", encoding="utf-8") as f:
                 f.write("#EXTM3U\n")
                 for inf_satiri, link_satiri in ayiklanmis_tr_listesi:
                     f.write(f"{inf_satiri}\n")
                     f.write(f"{link_satiri}\n")
-            print(f"🎉 İşlem Başarılı! Toplam {len(ayiklanmis_tr_listesi)} adet CANLI Türkçe kanal dosyaya yazıldı.")
+            print(f"🎉 İşlem Başarılı! Toplam {len(ayiklanmis_tr_listesi)} adet CANLI Türkçe kanal geçici dosyaya yazıldı.")
         except Exception as e:
             print(f"❌ Dosya yazılırken hata oldu: {e}")
     else:
-        print("❌ Havuzda hem aktif olan hem de yeterli Türkçe kanal barındıran bir panel bulunamadı.")
+        print("❌ Havuzda aktif ve yeterli Türkçe kanal barındıran bir panel bulunamadı.")
 
 if __name__ == "__main__":
     ana_calistirici()
