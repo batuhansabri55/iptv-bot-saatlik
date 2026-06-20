@@ -3,7 +3,7 @@ name: Otomatik IPTV Link Kontrolu
 on:
   schedule:
     - cron: '0 * * * *' # Her saat başı çalışır
-  workflow_dispatch: # 👈 İŞTE BU SATIR GRİ BUTONU ZORLA EKLETİR USTA!
+  workflow_dispatch: # Elle başlatma butonu
 
 jobs:
   check-iptv:
@@ -26,19 +26,27 @@ jobs:
     - name: IPTV Bulucu Kodunu Calistir
       run: python main.py
 
-    - name: Listeyi Diger Depoya Otomatik Gonder
+    - name: Canli Linki Diger Deponun Yedek Listesine Ekle
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 1. AkcagozTV_Canli deponuzu buraya geçici olarak çekiyoruz
+        # 1. Adım: İkinci deponuzu (AkcagozTV_Canli) çekiyoruz
         git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/batuhansabri55/AkcagozTV_Canli.git dondurulen_depo
         
-        # 2. Üretilen tr.m3u dosyasını o klasörün içine kopyalıyoruz
-        cp tr.m3u dondurulen_depo/tr.m3u
-        
-        # 3. Klasörün içine girip değişiklikleri push ediyoruz
-        cd dondurulen_depo
-        git add tr.m3u
-        git commit -m "Canlı Türkçe Listesi Otomatik Güncellendi" || exit 0
-        git push
+        # 2. Adım: Eğer bot taze bir canlı link bulabildiyse işleme başla
+        if [ -f canli_panel.txt ]; then
+          CANLI_URL=$(cat canli_panel.txt)
+          echo "🔗 Enjekte edilecek canlı URL: $CANLI_URL"
+          
+          # İkinci deponun içindeki update_list.py dosyasına taze linki YEDEK_KAYNAKLAR listesinin sonuna ekliyoruz
+          sed -i "/YEDEK_KAYNAKLAR = \[/a \    \"$CANLI_URL\"," dondurulen_depo/update_list.py
+          
+          # 3. Adım: Değişiklikleri push ederek ikinci depoyu güncelliyoruz
+          cd dondurulen_depo
+          git add update_list.py
+          git commit -m "Bot Tarafından Canlı Yedek Kaynak Eklendi" || exit 0
+          git push
+        else
+          echo "❌ Bu turda canlı panel bulunamadığı için dosya güncellenmedi."
+        fi
